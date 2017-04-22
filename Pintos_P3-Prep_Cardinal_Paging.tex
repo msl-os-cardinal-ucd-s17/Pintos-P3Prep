@@ -60,10 +60,7 @@ The most notable consequence of this design is what signal the operating system 
 Accomplishing this will require modification of the page fault handler code. The\\ \emph{page\_fault()} function is located in \emph{thread/exception.c}. Additionally, functions to handle adding the address to the page table can be found in \emph{userprog/pagedir.c}.
 
 
-\subsection{Page Replacement}
-
-\subsubsection{Least Recently Used (LRU)}
-
+\subsection{Page Replacement - Approximating Least Recently Used (LRU)}
 Pintos hardware provides some assistance for implementing page replacement algorithms, through a pair of bits in the page table entry (PTE) for each page. On any read or write to a page, the CPU sets the accessed bit to 1 in the page’s PTE, and on any write, the CPU sets the dirty bit to 1. The CPU never resets these bits to 0, but the OS may do so. 
 
 It is important to consider that two (or more) pages can refer to the same frame; this is known as aliasing. When an aliased frame is accessed, the accessed and dirty bits are updated in only one page table entry (the one for the page used for access). The accessed and dirty bits for the other aliases are not updated. In Pintos, every user virtual page is aliased to its kernel virtual page. A design implementation could check and update the accessed and dirty bits for both addresses, which are:
