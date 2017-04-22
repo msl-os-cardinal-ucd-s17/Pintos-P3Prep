@@ -13,7 +13,7 @@
                 stringstyle=\color{red},
                 commentstyle=\color{ForestGreen}}
 
-\title{Workshop 6 - System Calls}
+\title{Workshop 6 - Paging: problem, files, and tests}
 \author{Team Cardinal\\CSCI 3453 Spring 2017}
 \maketitle
 
@@ -23,17 +23,19 @@
 \section{Paging}
 
 \subsection{Overview}
-Within Pintos, each process has independent pages, which are allocated below virtual address PHYS\_BASE. The set of kernel pages, on the other hand, are located above PHYS\_BASE and is global and fixed, remaining the  same regardless of what thread or process is active. The kernel has the ability access both user and   kernel pages, but a user process is restricted to user pages.
+Paging is a virtual memory management mechanism by which a computer stores and retrieves data from secondary storage (disk, harddrive, etc.) for use in main memory (RAM). Through this,  the operating system retrieves data from secondary storage in continuous blocks of uniform size called pages. This size varies between operating systems, but within the Pintos 80x86 architecture a page is specified as 4096 bytes.   
+
+Paging is a necessary part of virtual memory  since the sum of each active program’s required memory exceeds the physical memory available to the system. By using secondary storage, active programs’ memory requirements can exceed the actual size of available physical memory.
+
+Each of Pintos' processes have independent pages which are allocated below virtual address PHYS\_BASE. The set of kernel pages, on the other hand, are located above PHYS\_BASE. Kernel pages are global and fixed-size, remaining the same regardless of what thread or process is active. The kernel can access both user and   kernel pages whereas a user process is restricted to user pages.
    
 Each virtual page beginning is placed at memory addresses  that are multiples of the page size. This strict placement is referred to as  page alignment and allows for efficient and fast access to memory. 
 
-Paging is a virtual memory management mechanism by which a computer stores and retrieves data from secondary storage (disk, harddrive, etc.) for use in main memory (RAM).  Within this mechanism,  the operating system retrieves data from secondary storage in continuous blocks of uniform size called pages. This size varies between operating systems, but within the Pintos 80x86 architecture a page is specified as 4096 bytes.   Paging is a necessary part of virtual memory  since the sum of each active program’s required memory exceeds the physical memory available to the system. By using secondary storage, active programs’ memory requirements can exceed the actual size of available physical memory.
-
 When a program is about to execute, the operating system has to divide its associated memory into pages, and then transfer the pages into RAM to begin execution. To the user, the entire program appears to occupy contiguous space in RAM at all times. In reality, not all pages of a program are necessarily in RAM, and the pages most likely don’t occupy contiguous space. When that virtual page becomes inactive or the allocated space is needed for a different page, it is pushed to secondary storage. Poor use of locality and exhaustive use of the physical memory can result in a constant state of paging, which is more accurately called thrashing. This is the process by which the operating system must “rapidly” exchange pages from secondary storage to continue executing a program. Since the speed of retrieval from disk is orders of magnitude slower than RAM or even cache, the user would notice considerable declined performance, as more time is spent paging than executing. 
 
-In P3, Pintos requires that paging only be implemented when a page fault occurs and a program requires a page that isn’t currently in virtual memory. Pintos doesn’t require that we preempt pages into cache to anticipate need.
+In P3, Pintos requires that paging only be implemented when a page fault occurs and a program requires a page that isn’t currently in virtual memory. Furthermore, Pintos doesn’t require that we preempt pages into cache to anticipate need. This document discusses the subproblems that must be tackled in order to implement paging within Pintos.
 
-Pintos Project 3 contains four subproblems involving paging:
+\section{Paging Subproblems}
 
 \subsection{Segments Loaded from Executables}
 Pintos is designed to load executable files in a ‘lazy’ manner. When a process is first loaded from memory there are two ways we can go about loading all the necessary information needed to run the program. First, we could load the process and in addition, load each page that the process will need to access throughout the course of the program execution. An alternate method is load the process and only load associated pages when the process actually needs access to them. The main benefit to lazy loading is that each process experiences less latency when initially starting up since less information is being loaded from the disk. Because of this, more processes are able to be loaded at once. The cost of this is small delays in each program each time a new page is accessed. 
@@ -64,23 +66,27 @@ Accomplishing this will require modification of the page fault handler code. The
 
 Pintos hardware provides some assistance for implementing page replacement algorithms, through a pair of bits in the page table entry (PTE) for each page. On any read or write to a page, the CPU sets the accessed bit to 1 in the page’s PTE, and on any write, the CPU sets the dirty bit to 1. The CPU never resets these bits to 0, but the OS may do so. 
 
-It is important to consider that two (or more) pages can refer to the same frame; this is known as aliasing. When an aliased frame is accessed, the accessed and dirty bits are updated in only one page table entry (the one for the page used for access). The accessed and dirty bits for the other aliases are not updated. In Pintos, every user virtual page is aliased to its kernel virtual page. A design implementation could check and update the accessed and dirty bits for both addresses.
+It is important to consider that two (or more) pages can refer to the same frame; this is known as aliasing. When an aliased frame is accessed, the accessed and dirty bits are updated in only one page table entry (the one for the page used for access). The accessed and dirty bits for the other aliases are not updated. In Pintos, every user virtual page is aliased to its kernel virtual page. A design implementation could check and update the accessed and dirty bits for both addresses, which are:
+\begin{enumerate}
+\item PTE\_A Bit 5, the “accessed” bit.
+\item PTE\_D Bit 6, the “dirty” bit. 
+\end{enumerate}
 
-          The access and dirty bits are as follows: 
+Refer to A.7.4.2 of the Pintos manual for more details.
 
-PTE\_A Bit 5, the “accessed” bit.
-PTE\_D Bit 6, the “dirty” bit. 
-
-See A.7.4.2 for more details on the composition of the entry.
-
-This algorithm of global page replacement should be designed and implemented 
-as follows: 
+The global page replacement algorithm is generally designed as follows: 
     
-Maintain a circular list of pages keeping a running count of how often a page is  accesses or referenced. Utilize both the accessed and dirty bits to determine replacement policy. A pointer traverses the circular linked list looking for the accessed bit ==0. If the current page accessed bit ==0, then check the dirty bit. If the dirty bit is also equal to 0, replace the page. If the dirty bit is 1, then reset the bit to 0 and then advance the pointer for evaluation at the next page. This policy makes use of the dirty bit as a “second chance” due to the expensive cost of replacing dirty pages.  In threads/pte.h, it goes over in greater details convenience functions, defines, and comments on the use of the PTE.
+Maintain a circular list of pages keeping a running count of how often a page is  accesses or referenced. Utilize both the accessed and dirty bits to determine replacement policy. A pointer traverses the circular linked list looking for the accessed bit equal to 0. If the current page accessed bit is equal to 0, then check the dirty bit. If the dirty bit is also equal to 0, replace the page. If the dirty bit is 1, then reset the bit to 0 and then advance the pointer for evaluation at the next page. This policy makes use of the dirty bit as a “second chance” due to the expensive cost of replacing dirty pages.  In threads/pte.h, it goes over in greater details convenience functions, defines, and comments on the use of the PTE.
     It is also important to note that the page replacement algorithm will also be used 
 to manage the frame table.
 \subsection{Page Fault Synchronization}
-
+	If a page fault requires I/O, it must be able to read data from the file system and/or the swap slot concurrently with currently non-faulting processes and page faults that do not require I/O. Thus, to prevent file system corruption \& to properly functioning processes that may require I/O at any given point, pages that load files must acquire the global file system lock when in use. This requires refactoring \emph{page\_fault(struct intr\_frame *f)} in \emph{src/userprog/exception.c} to determine if the type of page fault makes use of the Supplemental Page Table implemented for this project. By default, the \emph{page\_fault()} function provides three variables that determine the cause:
+	\begin{enumerate}
+		\item \emph{bool not\_present} - True if the page fault was triggered by an unloaded page, false if the page fault was triggered by writing to a read-only page.
+		\item \emph{bool write} - True if the process was writing when the page fault was triggered, false if the process was reading when the page fault was triggered.
+		\item \emph{bool user} - True if the page fault was triggered by a user-level process, false if the page fault was triggered by a kernel-level process.
+	\end{enumerate}
+	Logically speaking, if \emph{not\_present} is true and the page fault was triggered by a user level process, you can then rely on the Supplemental Page Table to determine if the file system lock should be acquired \& thus synchronize the I/O-requiring page fault.
 \subsection{Extension of the Program Loader}
 The core of the program loader must be modified. The program loader is the loop found in the load\_segment() function. 
 
@@ -115,13 +121,12 @@ corresponding page handling is as follows:
 \begin{enumerate}
 \item Should page faults that require I/O be blocked until all non-faulty running processes and non-I/O page faults finish execution, or should their precedence be determined with a round-robin scheduler? In other words, is starvation a concern with page fault synchronization?
 \item Why is a "second change" LRU implementation preferential to a FIFO implementation?
-\item If a page has already been loaded by one process, how can we ensure that the second process does not page fault and attempt to load that page into memory a second time.
+\item If a page has already been loaded by one process, how can we ensure that the second process does not page fault and attempt to load that page into memory a second time?
+\item Should there be a synchronization construct that locks the swap slot when in use?
 \end{enumerate}
 
-
-
 \section*{Conclusion}
-
+	Proper implementation and appreciation of the data structures detailed in the Resource Management Overview of the Pintos manual (section 4.1.3) requires a fundamental understanding of the purpose of (and problems posed by) paging. Since paging comprises a large portion of Pintos' third project (requiring usage of both the provided page directory and our own page loading functionality), adherence to well-documented design will streamline the project and allow teams to split up the paging subproblems amongst their members.
 \pagebreak
 \begin{appendices}
 
@@ -150,7 +155,10 @@ corresponding page handling is as follows:
 	\begin{itemize}
 		\item load\_segment()	
 	\end{itemize}
-
+	\item userprog/exception.c
+	\begin{itemize}
+		\item page\_fault()
+	\end{itemize}
 	\end{itemize}
 \item Operating Systems: Principles and Practices Second Edition by Thomas Anderson and Michael Dahlin
 \item Pintos Manual by Ben Pfaff
