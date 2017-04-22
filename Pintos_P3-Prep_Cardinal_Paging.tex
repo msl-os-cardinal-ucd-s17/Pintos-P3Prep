@@ -36,9 +36,28 @@ In P3, Pintos requires that paging only be implemented when a page fault occurs 
 Pintos Project 3 contains four subproblems involving paging:
 
 \subsection{Segments Loaded from Executables}
-Pintos is designed to load executable files in a ‘lazy’ manner. When a process is first loaded from memory there are two ways we can go about loading all the necessary information needed to run the program. First, we could load the process and in addition, load each page that the process will need to access throughout the course of the program execution. An alternate method is load the process and only load associated pages when the process actually needs access to them.
+Pintos is designed to load executable files in a ‘lazy’ manner. When a process is first loaded from memory there are two ways we can go about loading all the necessary information needed to run the program. First, we could load the process and in addition, load each page that the process will need to access throughout the course of the program execution. An alternate method is load the process and only load associated pages when the process actually needs access to them. The main benefit to lazy loading is that each process experiences less latency when initially starting up since less information is being loaded from the disk. Because of this, more processes are able to be loaded at once. The cost of this is small delays in each program each time a new page is accessed. 
 
-The most notable consequence of this design is what signal the operating system has that a new page needs to be loaded into memory. As the program runs, it will encounter a page fault every time it attempts to access a page which has not yet been loaded into main memory. The Pintos kernel is then tasked with intercepting the page fault and loading the appropriate page into memory before the process can continue, evicting a page or pages as necessary to create room in main memory. A major design consideration in Project 3 will be how to handle page faults as they arise during the course of program execution. 
+The most notable consequence of this design is what signal the operating system has that a new page needs to be loaded into memory. As the program runs, it will encounter a page fault every time it attempts to access a page which has not yet been loaded into main memory. The Pintos kernel is then tasked with intercepting the page fault and loading the appropriate page into memory before the process can continue, evicting a page or pages as necessary to create room in main memory. A major design consideration in Project 3 will be how to handle page faults as they arise during the course of program execution but in general the following actions must be taken by the page fault handler:
+
+
+\begin{enumerate}
+\item Look up the page that faulted in the Pintos supplemental page table
+\begin{enumerate}
+\item Verify that the memory reference is in a valid address space
+\item Terminate process if access to that page is invalid (read-only, kernel addr. space etc.)
+\end{enumerate}
+\item Obtain a new frame to store the page in main memory
+\begin{enumerate}
+\item May lead to eviction of page currently loaded in memory
+\end{enumerate}
+\item Read the data from disk/swap into the newly acquired frame
+\item Link the new physical page to the faulty address in the page table to subsequent access can be made
+\end{enumerate}
+
+Accomplishing this will require modification of the page fault handler code. The\\ \emph{page\_fault()} function is located in \emph{thread/exception.c}. Additionally, functions to handle adding the address to the page table can be found in \emph{userprog/pagedir.c}.
+
+
 \subsection{Page Replacement}
 
 \subsubsection{Least Recently Used (LRU)}
@@ -96,7 +115,7 @@ corresponding page handling is as follows:
 \begin{enumerate}
 \item Should page faults that require I/O be blocked until all non-faulty running processes and non-I/O page faults finish execution, or should their precedence be determined with a round-robin scheduler? In other words, is starvation a concern with page fault synchronization?
 \item Why is a "second change" LRU implementation preferential to a FIFO implementation?
-\item 
+\item If a page has already been loaded by one process, how can we ensure that the second process does not page fault and attempt to load that page into memory a second time.
 \end{enumerate}
 
 
